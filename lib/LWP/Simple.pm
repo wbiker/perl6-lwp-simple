@@ -84,11 +84,18 @@ method request_shell (RequestType $rt, Str $url, %headers = {}, Any $content?) {
     my ($status, $resp_headers, $resp_content) =
         self.make_request($rt, $hostname, $port, $path, %headers, $content, :$ssl);
 
+    # HTML header names are case insensitive. Use a hash with
+    # the header names as keys in lowercase.
+    my %resp_headers_lowercase;
+    for $resp_headers.hash.keys {
+      %resp_headers_lowercase{$_.lc} = $resp_headers{$_};
+    }
+
     given $status {
 
         when / 30 <[12]> / {
-            my %resp_headers = $resp_headers.hash;
-            my $new_url = %resp_headers<Location>;
+
+            my $new_url = %resp_headers_lowercase<location>;
             if ! $new_url {
                 die "Redirect $status without a new URL?";
             }
@@ -103,14 +110,14 @@ method request_shell (RequestType $rt, Str $url, %headers = {}, Any $content?) {
             return self.request_shell($rt, $new_url, %headers, $content);
         }
 
-        when / 20 <[0..9]> / {
+        when / 20 <[0..9]> | 400 / {
 
             # should be fancier about charset decoding application - someday
             if ($.force_encoding) {
                 return $resp_content.decode($.force_encoding);
             }
-            elsif (not $.force_no_encode) && $resp_headers<Content-Type> &&
-                $resp_headers<Content-Type> ~~
+            elsif (not $.force_no_encode) && %resp_headers_lowercase<content-type> &&
+                %resp_headers_lowercase<content-type> ~~
                     /   $<media-type>=[<-[/;]>+]
                         [ <[/]> $<media-subtype>=[<-[;]>+] ]? /  &&
                 (   $<media-type> eq 'text' ||
@@ -120,7 +127,7 @@ method request_shell (RequestType $rt, Str $url, %headers = {}, Any $content?) {
                 )
             {
                 my $charset =
-                    ($resp_headers<Content-Type> ~~ /charset\=(<-[;]>*)/)[0];
+                    (%resp_headers_lowercase<content-type> ~~ /charset\=(<-[;]>*)/)[0];
                 $charset = $charset ?? $charset.Str !!
                     self ?? $.default_encoding !! $.class_default_encoding;
                 return $resp_content.decode($charset);
@@ -324,8 +331,7 @@ method parse_response (Blob $resp) {
 
         for @header_lines {
             my ($name, $value) = .split(': ');
-            # HTML header names are case insensitive. Change them to Title-Case.
-            %header{$name.tc} = $value;
+            %header{$name} = $value;
         }
         return $status_line, %header.item, $resp.subbuf($header_end_pos +4).item;
     }
