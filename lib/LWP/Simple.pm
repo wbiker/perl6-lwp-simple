@@ -6,9 +6,9 @@ use MIME::Base64;
 use URI;
 use URI::Escape;
 
-unit class LWP::Simple:auth<cosimo>:ver<0.096>;
+unit class LWP::Simple:auth<cosimo>:ver<0.094>;
 
-our $VERSION = '0.096';
+our $VERSION = '0.094';
 
 enum RequestType <GET POST PUT HEAD DELETE>;
 
@@ -96,6 +96,7 @@ method request_shell (RequestType $rt, Str $url, %headers = {}, Any $content?) {
         when / 30 <[12]> / {
 
             my $new_url = %resp_headers_lowercase<location>;
+
             if ! $new_url {
                 die "Redirect $status without a new URL?";
             }
@@ -116,6 +117,7 @@ method request_shell (RequestType $rt, Str $url, %headers = {}, Any $content?) {
             if ($.force_encoding) {
                 return $resp_content.decode($.force_encoding);
             }
+
             elsif (not $.force_no_encode) && %resp_headers_lowercase<content-type> &&
                 %resp_headers_lowercase<content-type> ~~
                     /   $<media-type>=[<-[/;]>+]
@@ -128,8 +130,10 @@ method request_shell (RequestType $rt, Str $url, %headers = {}, Any $content?) {
             {
                 my $charset =
                     (%resp_headers_lowercase<content-type> ~~ /charset\=(<-[;]>*)/)[0];
+
                 $charset = $charset ?? $charset.Str !!
                     self ?? $.default_encoding !! $.class_default_encoding;
+
                 return $resp_content.decode($charset);
             }
             else {
